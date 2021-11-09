@@ -19,6 +19,7 @@ package org.jkiss.dbeaver.ext.postgresql.model;
 import org.jkiss.code.NotNull;
 import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.ext.postgresql.PostgreConstants;
+import org.jkiss.dbeaver.ext.postgresql.PostgreUtils;
 import org.jkiss.dbeaver.ext.postgresql.model.data.PostgreBinaryFormatter;
 import org.jkiss.dbeaver.ext.postgresql.sql.PostgreEscapeStringRule;
 import org.jkiss.dbeaver.model.*;
@@ -30,6 +31,7 @@ import org.jkiss.dbeaver.model.exec.jdbc.JDBCSession;
 import org.jkiss.dbeaver.model.impl.jdbc.JDBCDataSource;
 import org.jkiss.dbeaver.model.impl.jdbc.JDBCSQLDialect;
 import org.jkiss.dbeaver.model.impl.sql.BasicSQLDialect;
+import org.jkiss.dbeaver.model.sql.SQLDataTypeConverter;
 import org.jkiss.dbeaver.model.sql.SQLDialect;
 import org.jkiss.dbeaver.model.sql.SQLExpressionFormatter;
 import org.jkiss.dbeaver.model.sql.parser.rules.SQLDollarQuoteRule;
@@ -46,11 +48,12 @@ import java.sql.Types;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * PostgreSQL dialect
  */
-public class PostgreDialect extends JDBCSQLDialect implements TPRuleProvider {
+public class PostgreDialect extends JDBCSQLDialect implements TPRuleProvider, SQLDataTypeConverter {
     public static final String[] POSTGRE_NON_TRANSACTIONAL_KEYWORDS = ArrayUtils.concatArrays(
         BasicSQLDialect.NON_TRANSACTIONAL_KEYWORDS,
         new String[]{
@@ -827,8 +830,11 @@ public class PostgreDialect extends JDBCSQLDialect implements TPRuleProvider {
     @NotNull
     @Override
     public String escapeScriptValue(DBSTypedObject attribute, @NotNull Object value, @NotNull String strValue) {
-        if (value.getClass().getName().equals(PostgreConstants.PG_OBJECT_CLASS) || PostgreConstants.TYPE_BIT.equals(attribute.getTypeName()) || PostgreConstants.TYPE_INTERVAL.equals(attribute.getTypeName())
-        || attribute.getTypeID() == Types.OTHER) {
+        if (PostgreUtils.isPGObject(value) ||
+            PostgreConstants.TYPE_BIT.equals(attribute.getTypeName()) ||
+            PostgreConstants.TYPE_INTERVAL.equals(attribute.getTypeName()) ||
+            attribute.getTypeID() == Types.OTHER)
+        {
             // TODO: we need to add value handlers for all PG data types.
             // For now we use workaround: represent objects as strings
             return '\'' + escapeString(strValue) + '\'';
@@ -921,4 +927,59 @@ public class PostgreDialect extends JDBCSQLDialect implements TPRuleProvider {
     public boolean supportsInsertAllDefaultValuesStatement() {
         return true;
     }
+
+    @Override
+    public String convertExternalDataType(@NotNull SQLDialect sourceDialect, @NotNull DBSTypedObject sourceTypedObject, @Nullable DBPDataTypeProvider targetTypeProvider) {
+        String externalTypeName = sourceTypedObject.getTypeName().toLowerCase(Locale.ENGLISH);
+        String localDataType = null, dataTypeModifies = null;
+
+        switch (externalTypeName) {
+            case "xml":
+            case "xmltype":
+            case "sys.xmltype":
+                localDataType = "xml";
+                break;
+            case "varchar2":
+            case "nchar":
+            case "nvarchar":
+                localDataType = "varchar";
+                dataTypeModifies = String.valueOf(sourceTypedObject.getMaxLength());
+                break;
+            case "json":
+            case "jsonb":
+                localDataType = "jsonb";
+                break;
+            case "geometry":
+            case "sdo_geometry":
+            case "mdsys.sdo_geometry":
+                localDataType = "geometry";
+                break;
+            case "number":
+                localDataType = "numeric";
+                if (sourceTypedObject.getPrecision() != null) {
+                    dataTypeModifies = sourceTypedObject.getPrecision().toString();
+                    if (sourceTypedObject.getScale() != null) {
+                        dataTypeModifies += "," + sourceTypedObject.getScale();
+                    }
+                }
+                break;
+        }
+        if (localDataType == null) {
+            return null;
+        }
+        if (targetTypeProvider == null) {
+            return localDataType;
+        } else {
+            DBSDataType dataType = targetTypeProvider.getLocalDataType(localDataType);
+            if (dataType == null) {
+                return null;
+            }
+            String targetTypeName = DBUtils.getObjectFullName(dataType, DBPEvaluationContext.DDL);
+            if (dataTypeModifies != null) {
+                targetTypeName += "(" + dataTypeModifies + ")";
+            }
+            return targetTypeName;
+        }
+    }
+
 }

@@ -481,8 +481,14 @@ public class PostgreDataSource extends JDBCDataSource implements DBSInstanceCont
             return adapter.cast(new PostgreSessionManager(this));
         } else if (adapter == DBCQueryPlanner.class) {
             return adapter.cast(new PostgreQueryPlaner(this));
-        } else if (getServerType().supportsAlterUserChangePassword() && adapter == DBAUserChangePassword.class) {
-            return adapter.cast(new PostgresUserChangePassword(this));
+        } else if (adapter == DBSDataBulkLoader.class) {
+            if (getDataSource().getServerType().supportsCopyFromStdIn()) {
+                return adapter.cast(new PostgreCopyLoader(this));
+            }
+        } else if (adapter == DBAUserChangePassword.class) {
+            if (getServerType().supportsAlterUserChangePassword()) {
+                return adapter.cast(new PostgresUserChangePassword(this));
+            }
         }
         return super.getAdapter(adapter);
     }
@@ -672,7 +678,7 @@ public class PostgreDataSource extends JDBCDataSource implements DBSInstanceCont
         }
     }
 
-    static class DatabaseCache extends SimpleObjectCache<PostgreDataSource, PostgreDatabase> {
+    private static class DatabaseCache extends SimpleObjectCache<PostgreDataSource, PostgreDatabase> {
     }
 
     static class SettingCache extends JDBCObjectLookupCache<PostgreDataSource, PostgreSetting> {

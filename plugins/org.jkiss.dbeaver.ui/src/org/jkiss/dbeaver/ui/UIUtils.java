@@ -65,6 +65,9 @@ import org.jkiss.dbeaver.model.runtime.*;
 import org.jkiss.dbeaver.runtime.DBWorkbench;
 import org.jkiss.dbeaver.runtime.DummyRunnableContext;
 import org.jkiss.dbeaver.runtime.RunnableContextDelegate;
+import org.jkiss.dbeaver.ui.contentassist.ContentAssistUtils;
+import org.jkiss.dbeaver.ui.contentassist.SmartTextContentAdapter;
+import org.jkiss.dbeaver.ui.contentassist.StringContentProposalProvider;
 import org.jkiss.dbeaver.ui.controls.CustomSashForm;
 import org.jkiss.dbeaver.ui.dialogs.EditTextDialog;
 import org.jkiss.dbeaver.ui.dialogs.MessageBoxBuilder;
@@ -80,7 +83,10 @@ import java.lang.reflect.InvocationTargetException;
 import java.nio.charset.Charset;
 import java.text.DecimalFormatSymbols;
 import java.text.MessageFormat;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Locale;
+import java.util.SortedMap;
 
 /**
  * UI Utils
@@ -91,6 +97,7 @@ public class UIUtils {
     private static final String INLINE_WIDGET_EDITOR_ID = "org.jkiss.dbeaver.ui.InlineWidgetEditor";
     private static final Color COLOR_BLACK = new Color(null, 0, 0, 0);
     private static final Color COLOR_WHITE = new Color(null, 255, 255, 255);
+    private static final Color COLOR_WHITE_DARK = new Color(null, 208, 208, 208);
     private static final SharedTextColors SHARED_TEXT_COLORS = new SharedTextColors();
     private static final SharedFonts SHARED_FONTS = new SharedFonts();
     private static final String MAX_LONG_STRING = String.valueOf(Long.MAX_VALUE);
@@ -1365,11 +1372,27 @@ public class UIUtils {
         });
     }
 
-    public static TreeItem getTreeItem(Tree tree, Object data)
-    {
+    public static TreeItem getTreeItem(Tree tree, Object data) {
         for (TreeItem item : tree.getItems()) {
             if (item.getData() == data) {
                 return item;
+            }
+            TreeItem child = getTreeItem(item, data);
+            if (child != null) {
+                return child;
+            }
+        }
+        return null;
+    }
+
+    private static TreeItem getTreeItem(TreeItem parent, Object data) {
+        for (TreeItem item : parent.getItems()) {
+            if (item.getData() == data) {
+                return item;
+            }
+            TreeItem child = getTreeItem(item, data);
+            if (child != null) {
+                return child;
             }
         }
         return null;
@@ -1865,6 +1888,17 @@ public class UIUtils {
         return PlatformUI.getWorkbench().getSharedImages().getImageDescriptor(id);
     }
 
+    public static void addVariablesToControl(@NotNull Control controlForTip, @NotNull String[] variables, String toolTipPattern) {
+        final StringContentProposalProvider proposalProvider = new StringContentProposalProvider(Arrays
+            .stream(variables)
+            .map(GeneralUtils::variablePattern)
+            .toArray(String[]::new));
+
+        UIUtils.setContentProposalToolTip(controlForTip, toolTipPattern, variables);
+
+        ContentAssistUtils.installContentProposal(controlForTip, new SmartTextContentAdapter(), proposalProvider);
+    }
+
     public static void setContentProposalToolTip(Control control, String toolTip, String ... variables) {
         control.setToolTipText(getSupportedVariablesTip(toolTip, variables));
 
@@ -2000,7 +2034,7 @@ public class UIUtils {
         }
         double luminance = 1 - (0.299 * color.getRed() + 0.587 * color.getGreen() + 0.114 * color.getBlue()) / 255;
         if (luminance > 0.5) {
-            return COLOR_WHITE;
+            return UIStyles.isDarkTheme() ? COLOR_WHITE_DARK : COLOR_WHITE;
         }
         return COLOR_BLACK;
     }  

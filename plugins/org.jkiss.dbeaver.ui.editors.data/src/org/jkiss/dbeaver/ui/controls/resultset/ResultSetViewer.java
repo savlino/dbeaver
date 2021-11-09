@@ -1745,13 +1745,13 @@ public class ResultSetViewer extends Viewer
             selectionStatLabel.setToolTipText("Selected rows/columns/cells");
             CSSUtils.setCSSClass(selectionStatLabel, DBStyles.COLORED_BY_CONNECTION_TYPE);
 
-            Label filler = new Label(statusComposite, SWT.NONE);
-            filler.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
+//            Label filler = new Label(statusComposite, SWT.NONE);
+//            filler.setLayoutData(new GridData(GridData.FILL_HORIZONTAL));
 
-            statusLabel = new StatusLabel(statusComposite, SWT.NONE, this);
-            GridData gd = new GridData(GridData.VERTICAL_ALIGN_BEGINNING | GridData.HORIZONTAL_ALIGN_END);
-            gd.widthHint = 30 * fontHeight;
-            statusLabel.setLayoutData(gd);
+            statusLabel = new StatusLabel(statusBar, SWT.NONE, this);
+            RowData rd = new RowData();
+            rd.width = 30 * fontHeight;
+            statusLabel.setLayoutData(rd);
             CSSUtils.setCSSClass(statusLabel, DBStyles.COLORED_BY_CONNECTION_TYPE);
 
             statusBar.addListener(SWT.Resize, event -> {
@@ -2602,6 +2602,9 @@ public class ResultSetViewer extends Viewer
                     editMenu.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_ROW_ADD));
                     editMenu.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_ROW_COPY));
                     editMenu.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_ROW_DELETE));
+                    editMenu.add(new Separator());
+                    editMenu.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_ROW_COPY_FROM_ABOVE));
+                    editMenu.add(ActionUtils.makeCommandContribution(site, ResultSetHandlerMain.CMD_ROW_COPY_FROM_BELOW));
                 }
 
                 manager.add(new Separator());
@@ -4206,6 +4209,81 @@ public class ResultSetViewer extends Viewer
         activePresentation.scrollToRow(IResultSetPresentation.RowPosition.CURRENT);
 
         return curRow;
+    }
+
+    @Override
+    public void copyRowValues(boolean fromRowAbove, boolean updatePresentation) {
+        final DBCExecutionContext context = getExecutionContext();
+        if (context == null) {
+            throw new IllegalStateException("Can't fill rows in disconnected results");
+        }
+
+        final DBDAttributeBinding docAttribute = model.getDocumentAttribute();
+        final List<ResultSetRow> selectedRows = getSelection().getSelectedRows();
+        final List<DBDAttributeBinding> selectedAttributes = getSelection().getSelectedAttributes();
+        final int[][] partitionedSelectedRows = groupConsecutiveRows(
+            selectedRows.stream()
+                .mapToInt(ResultSetRow::getVisualNumber)
+                .toArray()
+        );
+
+        try (DBCSession session = context.openSession(new VoidProgressMonitor(), DBCExecutionPurpose.UTIL, ResultSetMessages.controls_resultset_viewer_add_new_row_context_name)) {
+            for (int[] partitionRange : partitionedSelectedRows) {
+                final int partitionStart = partitionRange[0];
+                final int partitionEnd = partitionRange[1];
+                final int sourceRowIndex;
+
+                if (partitionStart == partitionEnd) {
+                    // Single row in partition, copy values from row above/below this partition
+                    sourceRowIndex = partitionStart + (fromRowAbove ? -1 : 1);
+                } else {
+                    // Multiple rows in partition, copy values from first/last row of this partition
+                    sourceRowIndex = fromRowAbove ? partitionStart : partitionEnd;
+                }
+
+                if (sourceRowIndex < 0 || sourceRowIndex >= model.getRowCount()) {
+                    break;
+                }
+
+                final ResultSetRow sourceRow = model.getRow(sourceRowIndex);
+
+                for (int partitionIndex = partitionStart; partitionIndex <= partitionEnd; partitionIndex++) {
+                    if (partitionIndex == sourceRowIndex) {
+                        // We don't to override source row
+                        continue;
+                    }
+
+                    final ResultSetRow targetRow = model.getRow(partitionIndex);
+
+                    if (docAttribute != null) {
+                        try {
+                            final Object sourceValue = docAttribute.getValueHandler().getValueFromObject(session, docAttribute, model.getCellValue(docAttribute, sourceRow), true, false);
+                            final ResultSetValueController controller = new ResultSetValueController(this, docAttribute, targetRow, IValueController.EditType.NONE, null);
+                            controller.updateValue(sourceValue, false);
+                        } catch (DBCException e) {
+                            log.error("Can't extract document value", e);
+                        }
+                    } else {
+                        for (final DBDAttributeBinding metaAttr : selectedAttributes) {
+                            if (!metaAttr.isPseudoAttribute() && !metaAttr.isAutoGenerated()) {
+                                final DBSAttributeBase attribute = metaAttr.getAttribute();
+                                try {
+                                    final Object sourceValue = metaAttr.getValueHandler().getValueFromObject(session, attribute, model.getCellValue(metaAttr, sourceRow), true, false);
+                                    final ResultSetValueController controller = new ResultSetValueController(this, metaAttr, targetRow, IValueController.EditType.NONE, null);
+                                    controller.updateValue(sourceValue, false);
+                                } catch (DBCException e) {
+                                    log.error("Can't extract cell value", e);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if (updatePresentation) {
+            redrawData(false, true);
+            updateEditControls();
+        }
     }
 
     /**

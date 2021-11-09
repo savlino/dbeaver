@@ -35,7 +35,9 @@ import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.runtime.DBRRunnableParametrized;
 import org.jkiss.dbeaver.model.runtime.VoidProgressMonitor;
 import org.jkiss.dbeaver.model.struct.*;
+import org.jkiss.dbeaver.model.struct.rdb.DBSCatalog;
 import org.jkiss.dbeaver.model.struct.rdb.DBSPackage;
+import org.jkiss.dbeaver.model.struct.rdb.DBSSchema;
 import org.jkiss.dbeaver.model.struct.rdb.DBSSequence;
 import org.jkiss.utils.ArrayUtils;
 import org.jkiss.utils.BeanUtils;
@@ -64,7 +66,7 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBNLazyNode, DB
     void registerNode() {
         DBNModel model = getModel();
         if (model != null) {
-            model.addNode(this);
+            model.addNode(this, false);
         }
     }
 
@@ -437,6 +439,7 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBNLazyNode, DB
         final boolean showSystem = navSettings.isShowSystemObjects();
         final boolean showOnlyEntities = navSettings.isShowOnlyEntities();
         final boolean hideFolders = navSettings.isHideFolders();
+        boolean mergeEntities = navSettings.isMergeEntities();
 
         for (DBXTreeNode child : childMetas) {
             if (monitor.isCanceled()) {
@@ -452,7 +455,7 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBNLazyNode, DB
                 /*if (hideSchemas && isSchemaItem(item)) {
                     // Merge
                 } else */{
-                    boolean isLoaded = loadTreeItems(monitor, item, oldList, toList, source, showSystem, hideFolders, reflect);
+                    boolean isLoaded = loadTreeItems(monitor, item, oldList, toList, source, showSystem, hideFolders, mergeEntities, reflect);
                     if (!isLoaded && item.isOptional() && item.getRecursiveLink() == null) {
                         // This may occur only if no child nodes was read
                         // Then we try to go on next DBX level
@@ -460,7 +463,7 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBNLazyNode, DB
                     }
                 }
             } else if (child instanceof DBXTreeFolder) {
-                if (hideFolders) {
+                if (hideFolders || (mergeEntities && ((DBXTreeFolder)child).isOptional())) {
                     if (child.isVirtual()) {
                         continue;
                     }
@@ -565,6 +568,7 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBNLazyNode, DB
         Object source,
         boolean showSystem,
         boolean hideFolders,
+        boolean mergeEntities,
         boolean reflect)
         throws DBException {
         if (this.isDisposed())
@@ -625,12 +629,17 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBNLazyNode, DB
                 // Skip hidden objects
                 continue;
             }
-            if (!showSystem && DBUtils.isSystemObject(childItem)) {
+            if ((!showSystem && DBUtils.isSystemObject(childItem)) &&
+                !(itemList.size() == 1 && (childItem instanceof DBSSchema || childItem instanceof DBSCatalog))) { // Show system catalog/schema in case when only one object in the itemList
                 // Skip system objects
                 continue;
             }
             if (hideFolders && (childItem instanceof DBAObject || childItem instanceof DBPSystemInfoObject)) {
                 // Skip all DBA objects
+                continue;
+            }
+            if (mergeEntities && childItem instanceof DBSSchema) {
+                // Skip schemas in merge entities mode
                 continue;
             }
             if (filter != null && !filter.matches(((DBSObject) childItem).getName())) {
@@ -643,14 +652,15 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBNLazyNode, DB
                 // Check that new object is a replacement of old one
                 for (DBNDatabaseNode oldChild : oldList) {
                     if (oldChild.getMeta() == meta && equalObjects(oldChild.getObject(), object)) {
-                        oldChild.reloadObject(monitor, object);
+                        boolean updated = oldChild.reloadObject(monitor, object);
 
                         if (oldChild.hasChildren(false) && !oldChild.needsInitialization()) {
                             // Refresh children recursive
                             oldChild.reloadChildren(monitor, source, reflect);
                         }
-                        if (reflect) {
-                            getModel().fireNodeUpdate(source, oldChild, DBNEvent.NodeChange.REFRESH);
+                        if (updated && reflect) {
+                            // FIXME: do not update all refreshed items in (it is too expensive)
+                            //getModel().fireNodeUpdate(source, oldChild, DBNEvent.NodeChange.REFRESH);
                         }
 
                         toList.add(oldChild);
@@ -811,7 +821,7 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBNLazyNode, DB
         }
     }
 
-    private static boolean equalObjects(DBSObject object1, DBSObject object2) {
+    protected static boolean equalObjects(DBSObject object1, DBSObject object2) {
         if (object1 == object2) {
             return true;
         }
@@ -857,7 +867,7 @@ public abstract class DBNDatabaseNode extends DBNNode implements DBNLazyNode, DB
         return null;
     }
 
-    protected abstract void reloadObject(DBRProgressMonitor monitor, DBSObject object);
+    protected abstract boolean reloadObject(DBRProgressMonitor monitor, DBSObject object);
 
     public List<Class<?>> getChildrenTypes(DBXTreeNode useMeta) {
         List<DBXTreeNode> childMetas = useMeta == null ? getMeta().getChildren(this) : Collections.singletonList(useMeta);

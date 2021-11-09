@@ -16,14 +16,17 @@
  */
 package org.jkiss.dbeaver.model.connection;
 
+import org.jkiss.code.NotNull;
+import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.model.DBPDataSourceContainer;
+import org.jkiss.dbeaver.utils.RuntimeUtils;
 import org.jkiss.dbeaver.utils.SystemVariablesResolver;
 
 public class DataSourceVariableResolver extends SystemVariablesResolver {
     private final DBPDataSourceContainer dataSourceContainer;
     private final DBPConnectionConfiguration configuration;
 
-    public DataSourceVariableResolver(DBPDataSourceContainer dataSourceContainer, DBPConnectionConfiguration configuration) {
+    public DataSourceVariableResolver(@Nullable DBPDataSourceContainer dataSourceContainer, @NotNull DBPConnectionConfiguration configuration) {
         this.dataSourceContainer = dataSourceContainer;
         this.configuration = configuration;
     }
@@ -47,10 +50,14 @@ public class DataSourceVariableResolver extends SystemVariablesResolver {
                 return configuration.getUrl();
             case DBPConnectionConfiguration.VARIABLE_CONN_TYPE:
                 return configuration.getConnectionType().getId();
+            case DBPConnectionConfiguration.VARIABLE_DATASOURCE:
+                return dataSourceContainer == null ? null : dataSourceContainer.getName();
             case DBPConnectionConfiguration.VAR_PROJECT_PATH:
                 return dataSourceContainer == null ? null : dataSourceContainer.getProject().getAbsolutePath().getAbsolutePath();
             case DBPConnectionConfiguration.VAR_PROJECT_NAME:
                 return dataSourceContainer == null ? null : dataSourceContainer.getProject().getName();
+            case DBPConnectionConfiguration.VARIABLE_DATE:
+                return RuntimeUtils.getCurrentDate();
             default:
                 String var = super.get(name);
                 if (var != null) {

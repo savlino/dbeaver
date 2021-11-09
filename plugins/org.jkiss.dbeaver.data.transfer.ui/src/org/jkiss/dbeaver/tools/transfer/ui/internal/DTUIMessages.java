@@ -59,6 +59,8 @@ public class DTUIMessages extends NLS {
     public static String database_consumer_wizard_checkbox_multi_insert_skip_bind_values_description;
 	public static String database_consumer_wizard_disable_import_batches_label;
 	public static String database_consumer_wizard_disable_import_batches_description;
+	public static String database_consumer_wizard_use_bulk_load_label;
+	public static String database_consumer_wizard_use_bulk_load_description;
 	public static String database_consumer_wizard_on_duplicate_key_insert_method_text;
 	public static String database_consumer_wizard_link_label_replace_method_wiki;
 	public static String database_consumer_wizard_label_replace_method_not_supported;
@@ -109,9 +111,11 @@ public class DTUIMessages extends NLS {
 	public static String stream_consumer_page_output_checkbox_execute_process;
 	public static String stream_consumer_page_output_label_maximum_file_size;
 	public static String stream_consumer_page_output_label_show_finish_message;
+	public static String stream_consumer_page_output_tooltip_output_directory_pattern;
 	public static String stream_consumer_page_output_tooltip_output_file_name_pattern;
 	public static String stream_consumer_page_output_label_results;
 	public static String stream_consumer_page_output_tooltip_process_command_line;
+	public static String stream_consumer_page_output_variables_hint_label;
 	public static String stream_consumer_page_settings_title;
 	public static String stream_consumer_page_settings_description;
 	public static String stream_consumer_page_settings_item_text_none;

@@ -29,6 +29,7 @@ import org.jkiss.dbeaver.model.DBUtils;
 import org.jkiss.dbeaver.model.DBValueFormatting;
 import org.jkiss.dbeaver.model.navigator.DBNDatabaseNode;
 import org.jkiss.dbeaver.model.navigator.DBNModel;
+import org.jkiss.dbeaver.model.sql.SQLQueryContainer;
 import org.jkiss.dbeaver.model.struct.DBSObject;
 import org.jkiss.dbeaver.runtime.DBWorkbench;
 import org.jkiss.dbeaver.tools.transfer.DataTransferSettings;
@@ -65,6 +66,7 @@ class DataTransferPagePipes extends ActiveWizardPage<DataTransferWizard> {
 
     DataTransferPagePipes() {
         super(DTMessages.data_transfer_wizard_init_name);
+        setTitle(DTMessages.data_transfer_wizard_init_name);
     }
 
     @Override
@@ -78,7 +80,7 @@ class DataTransferPagePipes extends ActiveWizardPage<DataTransferWizard> {
 
         createNodesTable(sash);
         createInputsTable(sash);
-        sash.setWeights(new int[]{60, 40});
+        sash.setWeights(new int[]{70, 30});
 
         setControl(composite);
     }
@@ -89,7 +91,10 @@ class DataTransferPagePipes extends ActiveWizardPage<DataTransferWizard> {
         //UIUtils.createControlLabel(panel, DTUIMessages.data_transfer_wizard_final_column_target);
 
         nodesTable = new TableViewer(panel, SWT.BORDER | SWT.SINGLE | SWT.FULL_SELECTION);
-        nodesTable.getTable().setLayoutData(new GridData(GridData.FILL_BOTH));
+        GridData gd = new GridData(GridData.FILL_BOTH);
+        gd.heightHint = 400;
+        gd.widthHint = 500;
+        nodesTable.getTable().setLayoutData(gd);
         nodesTable.getTable().setLinesVisible(true);
         nodesTable.setContentProvider(new IStructuredContentProvider() {
             @Override
@@ -154,7 +159,7 @@ class DataTransferPagePipes extends ActiveWizardPage<DataTransferWizard> {
             {
                 widgetSelected(e);
                 if (isPageComplete()) {
-                    getWizard().getContainer().showPage(getWizard().getNextPage(DataTransferPagePipes.this));
+                    getWizard().getContainer().nextPressed();
                 }
             }
         });
@@ -181,6 +186,7 @@ class DataTransferPagePipes extends ActiveWizardPage<DataTransferWizard> {
             }
         }
         updatePageCompletion();
+        getWizard().getContainer().updateNavigationTree();
     }
 
     private void createInputsTable(Composite composite) {
@@ -189,7 +195,10 @@ class DataTransferPagePipes extends ActiveWizardPage<DataTransferWizard> {
         //UIUtils.createControlLabel(panel, DTUIMessages.data_transfer_wizard_final_group_objects);
 
         inputsTable = new TableViewer(panel, SWT.BORDER | SWT.SINGLE | SWT.FULL_SELECTION);
-        inputsTable.getTable().setLayoutData(new GridData(GridData.FILL_BOTH));
+        GridData gd = new GridData(GridData.FILL_BOTH);
+        //gd.widthHint = 300;
+        gd.heightHint = 300;
+        inputsTable.getTable().setLayoutData(gd);
         inputsTable.getTable().setLinesVisible(true);
         inputsTable.getTable().setHeaderVisible(true);
         inputsTable.setContentProvider(new ListContentProvider());
@@ -203,7 +212,13 @@ class DataTransferPagePipes extends ActiveWizardPage<DataTransferWizard> {
                     DBNDatabaseNode objectNode = nModel.getNodeByObject(element);
                     DBPImage icon = objectNode != null ? objectNode.getNodeIconDefault() : DBValueFormatting.getObjectImage(element);
                     cell.setImage(DBeaverIcons.getImage(icon));
-                    cell.setText(DBUtils.getObjectFullName(element, DBPEvaluationContext.UI));
+                    final SQLQueryContainer queryContainer = DBUtils.getAdapter(SQLQueryContainer.class, element);
+                    if (queryContainer != null) {
+                        // We don't need extra quotes for queries
+                        cell.setText(queryContainer.getQuery().getText());
+                    } else {
+                        cell.setText(DBUtils.getObjectFullName(element, DBPEvaluationContext.UI));
+                    }
                 } else if (element.getDescription() != null) {
                     cell.setText(element.getDescription());
                 }
@@ -222,24 +237,26 @@ class DataTransferPagePipes extends ActiveWizardPage<DataTransferWizard> {
 
     @Override
     public void activatePage() {
+        inputsTable.setInput(getWizard().getSettings().getSourceObjects());
+        if (!activated) {
+            UIUtils.asyncExec(this::loadNodeSettings);
+        }
         if (activated && getWizard().getSettings().isPipeChangeRestricted()) {
             // Second activation - we need to disable any selectors
             nodesTable.getTable().setEnabled(false);
             return;
         }
         activated = true;
-
-        UIUtils.asyncExec(this::loadNodeSettings);
     }
 
     private void loadNodeSettings() {
         if (getWizard().getSettings().isConsumerOptional()) {
-            setTitle(DTMessages.data_transfer_wizard_init_title);
+            setTitle("Export target");
             setDescription(DTMessages.data_transfer_wizard_init_description);
 
             loadConsumers();
         } else {
-            setTitle(DTMessages.data_transfer_wizard_producers_title);
+            setTitle("Import source");
             setDescription(DTMessages.data_transfer_wizard_producers_description);
 
             loadProducers();
@@ -248,17 +265,26 @@ class DataTransferPagePipes extends ActiveWizardPage<DataTransferWizard> {
         DataTransferNodeDescriptor consumer = getWizard().getSettings().getConsumer();
         DataTransferNodeDescriptor producer = getWizard().getSettings().getProducer();
         DataTransferProcessorDescriptor processor = getWizard().getSettings().getProcessor();
+        List<TransferTarget> targets = (List<TransferTarget>) nodesTable.getInput();
+        TransferTarget currentTarget = null;
         if (consumer != null || producer != null) {
-            Collection<TransferTarget> targets = (Collection<TransferTarget>) nodesTable.getInput();
             for (TransferTarget target : targets) {
                 if ((target.node == consumer || target.node == producer) && target.processor == processor) {
-                    UIUtils.asyncExec(() -> {
-                        nodesTable.setSelection(new StructuredSelection(target));
-                        setSelectedSettings();
-                    });
+                    currentTarget = target;
                     break;
                 }
             }
+        }
+        if (currentTarget == null && !targets.isEmpty()) {
+            currentTarget = targets.get(0);
+        }
+
+        if (currentTarget != null) {
+            StructuredSelection selection = new StructuredSelection(currentTarget);
+            UIUtils.asyncExec(() -> {
+                nodesTable.setSelection(selection);
+                setSelectedSettings();
+            });
         }
 
         inputsTable.setInput(getWizard().getSettings().getSourceObjects());
@@ -310,6 +336,10 @@ class DataTransferPagePipes extends ActiveWizardPage<DataTransferWizard> {
     @Override
     protected boolean determinePageCompletion() {
         DataTransferSettings settings = getWizard().getSettings();
+        if (settings.getDataPipes().isEmpty()) {
+            setErrorMessage("No objects selected");
+            return false;
+        }
         if (settings.getConsumer() == null || settings.getProducer() == null) {
             return false;
         }

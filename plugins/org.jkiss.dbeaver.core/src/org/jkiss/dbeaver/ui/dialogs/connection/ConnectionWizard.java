@@ -44,7 +44,6 @@ import org.jkiss.dbeaver.ui.IDataSourceConnectionTester;
 import org.jkiss.dbeaver.ui.IDialogPageProvider;
 import org.jkiss.dbeaver.ui.dialogs.ActiveWizard;
 import org.jkiss.dbeaver.utils.GeneralUtils;
-import org.jkiss.dbeaver.utils.RuntimeUtils;
 import org.jkiss.utils.ArrayUtils;
 
 import java.lang.reflect.InvocationTargetException;
@@ -118,10 +117,10 @@ public abstract class ConnectionWizard extends ActiveWizard implements INewWizar
             throw new IllegalStateException("No active project");
         }
         if (info == null) {
-            DBPConnectionConfiguration connectionInfo = new DBPConnectionConfiguration();
+            DBPConnectionConfiguration connectionInfo = getDefaultConnectionConfiguration();
             info = new DataSourceDescriptor(
                 registry,
-                DataSourceDescriptor.generateNewId(getSelectedDriver()),
+                DataSourceDescriptor.generateNewId(driver),
                 driver,
                 connectionInfo);
             DBPNativeClientLocation defaultClientLocation = driver.getDefaultClientLocation();
@@ -159,9 +158,9 @@ public abstract class ConnectionWizard extends ActiveWizard implements INewWizar
             });
 
             try {
-                getContainer().run(true, true, monitor -> {
+                getRunnableContext().run(true, true, monitor -> {
                     // Wait for job to finish
-                    op.setOwnerMonitor(RuntimeUtils.makeMonitor(monitor));
+                    op.setOwnerMonitor(monitor);
                     op.schedule();
                     while (op.getState() == Job.WAITING || op.getState() == Job.RUNNING) {
                         if (monitor.isCanceled()) {
@@ -246,4 +245,8 @@ public abstract class ConnectionWizard extends ActiveWizard implements INewWizar
         return false;
     }
 
+    @NotNull
+    protected DBPConnectionConfiguration getDefaultConnectionConfiguration() {
+        return new DBPConnectionConfiguration();
+    }
 }

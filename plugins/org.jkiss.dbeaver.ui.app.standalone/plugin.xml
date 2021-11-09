@@ -372,6 +372,10 @@
             <keywordReference id="org.jkiss.dbeaver.core.keyword.connection"/>
             <keywordReference id="org.jkiss.dbeaver.core.keyword.dbeaver"/>
         </page>
+        <page category="org.jkiss.dbeaver.preferences.drivers" id="org.jkiss.dbeaver.preferences.drivers.classpath" class="org.jkiss.dbeaver.ui.preferences.PrefPageDriversClasspath" name="%pref.page.name.drivers.classpath">
+            <keywordReference id="org.jkiss.dbeaver.core.keyword.connection"/>
+            <keywordReference id="org.jkiss.dbeaver.core.keyword.dbeaver"/>
+        </page>
         <page category="org.jkiss.dbeaver.preferences.main.connections" id="org.jkiss.dbeaver.preferences.connectionTypes" class="org.jkiss.dbeaver.ui.preferences.PrefPageConnectionTypes" name="%pref.page.name.connectionTypes">
             <keywordReference id="org.jkiss.dbeaver.core.keyword.connection"/>
             <keywordReference id="org.jkiss.dbeaver.core.keyword.dbeaver"/>
@@ -420,6 +424,15 @@
 
     <extension point="org.eclipse.core.runtime.preferences">
         <initializer class="org.jkiss.dbeaver.ui.app.standalone.DBeaverApplicationPreferenceInitializer"/>
+    </extension>
+
+    <extension point="org.jkiss.dbeaver.commandLine">
+        <parameter name="translateSQL"
+            longName="translate-sql-script"
+            description="Translates sql script from one dialect to another."
+            exitAfterExecute="true"
+            hasArg="true"
+            handler="org.jkiss.dbeaver.ui.app.standalone.cli.SQLTranslatorHandler"/>
     </extension>
 
 </plugin>

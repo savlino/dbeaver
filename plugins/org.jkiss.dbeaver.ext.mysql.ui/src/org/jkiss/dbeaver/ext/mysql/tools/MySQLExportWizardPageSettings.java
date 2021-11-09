@@ -34,6 +34,7 @@ import org.jkiss.dbeaver.utils.GeneralUtils;
 import org.jkiss.utils.CommonUtils;
 
 import java.io.File;
+import java.util.Arrays;
 
 
 class MySQLExportWizardPageSettings extends MySQLWizardPageSettings<MySQLExportWizard> {
@@ -59,9 +60,12 @@ class MySQLExportWizardPageSettings extends MySQLWizardPageSettings<MySQLExportW
     }
 
     @Override
-    public boolean isPageComplete()
-    {
-        return super.isPageComplete() && wizard.getSettings().getOutputFolder() != null;
+    protected boolean determinePageCompletion() {
+        if (wizard.getSettings().getOutputFolder() == null) {
+            setErrorMessage("Output folder not configured");
+            return false;
+        }
+        return super.determinePageCompletion();
     }
 
     @Override
@@ -108,23 +112,11 @@ class MySQLExportWizardPageSettings extends MySQLWizardPageSettings<MySQLExportW
         Group outputGroup = UIUtils.createControlGroup(composite, MySQLUIMessages.tools_db_export_wizard_page_settings_group_output, 2, GridData.FILL_HORIZONTAL, 0);
         outputFolderText = DialogUtils.createOutputFolderChooser(outputGroup, MySQLUIMessages.tools_db_export_wizard_page_settings_label_out_text, e -> updateState());
         outputFileText = UIUtils.createLabelText(outputGroup, MySQLUIMessages.tools_db_export_wizard_page_settings_label_file_name_pattern_text, wizard.getSettings().getOutputFilePattern());
-        UIUtils.setContentProposalToolTip(outputFileText, MySQLUIMessages.tools_db_export_wizard_page_settings_label_file_name_pattern_tip,
-            NativeToolUtils.VARIABLE_HOST,
-            NativeToolUtils.VARIABLE_DATABASE,
-            NativeToolUtils.VARIABLE_TABLE,
-            NativeToolUtils.VARIABLE_DATE,
-            NativeToolUtils.VARIABLE_TIMESTAMP,
-            NativeToolUtils.VARIABLE_CONN_TYPE);
+        UIUtils.setContentProposalToolTip(outputFileText, MySQLUIMessages.tools_db_export_wizard_page_settings_label_file_name_pattern_tip, NativeToolUtils.ALL_VARIABLES);
         ContentAssistUtils.installContentProposal(
             outputFileText,
             new SmartTextContentAdapter(),
-            new StringContentProposalProvider(
-                GeneralUtils.variablePattern(NativeToolUtils.VARIABLE_HOST),
-                GeneralUtils.variablePattern(NativeToolUtils.VARIABLE_DATABASE),
-                GeneralUtils.variablePattern(NativeToolUtils.VARIABLE_TABLE),
-                GeneralUtils.variablePattern(NativeToolUtils.VARIABLE_DATE),
-                GeneralUtils.variablePattern(NativeToolUtils.VARIABLE_TIMESTAMP),
-                GeneralUtils.variablePattern(NativeToolUtils.VARIABLE_CONN_TYPE)));
+            new StringContentProposalProvider(Arrays.stream(NativeToolUtils.ALL_VARIABLES).map(GeneralUtils::variablePattern).toArray(String[]::new)));
 
         createExtraArgsInput(outputGroup);
 
@@ -132,11 +124,12 @@ class MySQLExportWizardPageSettings extends MySQLWizardPageSettings<MySQLExportW
             outputFolderText.setText(wizard.getSettings().getOutputFolder().getAbsolutePath());
         }
 
-        outputFileText.addModifyListener(e -> wizard.getSettings().setOutputFilePattern(outputFileText.getText()));
+        outputFileText.addModifyListener(e -> {
+            wizard.getSettings().setOutputFilePattern(outputFileText.getText());
+        });
 
         Composite extraGroup = UIUtils.createComposite(composite, 2);
         createSecurityGroup(extraGroup);
-        wizard.createTaskSaveGroup(extraGroup);
 
         setControl(composite);
     }
@@ -177,6 +170,7 @@ class MySQLExportWizardPageSettings extends MySQLWizardPageSettings<MySQLExportW
     protected void updateState()
     {
         saveState();
+        updatePageCompletion();
         getContainer().updateButtons();
     }
 

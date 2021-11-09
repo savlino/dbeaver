@@ -16,10 +16,10 @@
  */
 package org.jkiss.dbeaver.tools.transfer.stream.importer;
 
-import au.com.bytecode.opencsv.CSVReader;
 import org.jkiss.code.NotNull;
 import org.jkiss.dbeaver.DBException;
 import org.jkiss.dbeaver.Log;
+import org.jkiss.dbeaver.model.DBFetchProgress;
 import org.jkiss.dbeaver.model.DBPDataKind;
 import org.jkiss.dbeaver.model.DBPDataSource;
 import org.jkiss.dbeaver.model.DBUtils;
@@ -34,6 +34,7 @@ import org.jkiss.dbeaver.tools.transfer.stream.*;
 import org.jkiss.dbeaver.utils.GeneralUtils;
 import org.jkiss.utils.CommonUtils;
 import org.jkiss.utils.Pair;
+import org.jkiss.utils.csv.CSVReader;
 import org.jkiss.utils.io.BOMInputStream;
 
 import java.io.*;
@@ -55,6 +56,7 @@ public class DataImporterCSV extends StreamImporterAbstract {
     private static final String PROP_NULL_STRING = "nullString";
     private static final String PROP_EMPTY_STRING_NULL = "emptyStringNull";
     private static final String PROP_ESCAPE_CHAR = "escapeChar";
+    public static final int READ_BUFFER_SIZE = 255 * 1024;
 
     public enum HeaderPosition {
         none,
@@ -75,7 +77,7 @@ public class DataImporterCSV extends StreamImporterAbstract {
         final int columnMinimalLength = Math.max(CommonUtils.toInt(processorProperties.get(PROP_COLUMN_TYPE_LENGTH), 1), 1);
         final boolean columnIsByteLength = CommonUtils.getBoolean(processorProperties.get(PROP_COLUMN_IS_BYTE_LENGTH), false);
 
-        try (Reader reader = openStreamReader(inputStream, processorProperties)) {
+        try (Reader reader = openStreamReader(inputStream, processorProperties, false)) {
             try (CSVReader csvReader = openCSVReader(reader, processorProperties)) {
                 String[] header = getNextLine(csvReader);
                 if (header == null) {
@@ -170,9 +172,12 @@ public class DataImporterCSV extends StreamImporterAbstract {
         return new CSVReader(reader, delimiter.charAt(0), quoteChar.charAt(0), escapeChar.charAt(0));
     }
 
-    private InputStreamReader openStreamReader(InputStream inputStream, Map<String, Object> processorProperties) throws UnsupportedEncodingException {
+    private Reader openStreamReader(InputStream inputStream, Map<String, Object> processorProperties, boolean useBufferedStream) throws UnsupportedEncodingException {
         final String encoding = CommonUtils.toString(processorProperties.get(PROP_ENCODING), GeneralUtils.UTF8_ENCODING);
         final Charset charset = Charset.forName(encoding);
+        if (useBufferedStream) {
+            inputStream = new BufferedInputStream(inputStream, READ_BUFFER_SIZE);
+        }
         try {
             inputStream = new BOMInputStream(inputStream, charset);
         } catch (IllegalArgumentException ignored) {
@@ -212,7 +217,7 @@ public class DataImporterCSV extends StreamImporterAbstract {
 
             applyTransformHints(resultSet, consumer, properties, PROP_TIMESTAMP_FORMAT, PROP_TIMESTAMP_ZONE);
 
-            try (Reader reader = openStreamReader(inputStream, properties)) {
+            try (Reader reader = openStreamReader(inputStream, properties, true)) {
                 try (CSVReader csvReader = openCSVReader(reader, properties)) {
 
                     int maxRows = site.getSettings().getMaxRows();
@@ -266,8 +271,8 @@ public class DataImporterCSV extends StreamImporterAbstract {
                         consumer.fetchRow(producerSession, resultSet);
                         lineNum++;
 
-                        if (lineNum % 1000 == 0) {
-                            monitor.subTask(String.valueOf(lineNum) + " rows processed");
+                        if (DBFetchProgress.monitorFetchProgress(lineNum)) {
+                            monitor.subTask(lineNum + " rows processed");
                         }
                     }
                 }

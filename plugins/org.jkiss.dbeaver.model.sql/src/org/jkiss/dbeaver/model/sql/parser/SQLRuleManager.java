@@ -18,6 +18,7 @@ package org.jkiss.dbeaver.model.sql.parser;
 
 import org.jkiss.code.NotNull;
 import org.jkiss.code.Nullable;
+import org.jkiss.dbeaver.Log;
 import org.jkiss.dbeaver.model.DBPDataSource;
 import org.jkiss.dbeaver.model.DBPDataSourceContainer;
 import org.jkiss.dbeaver.model.DBPKeywordType;
@@ -29,7 +30,10 @@ import org.jkiss.dbeaver.model.sql.parser.tokens.*;
 import org.jkiss.dbeaver.model.sql.registry.SQLCommandHandlerDescriptor;
 import org.jkiss.dbeaver.model.sql.registry.SQLCommandsRegistry;
 import org.jkiss.dbeaver.model.text.parser.*;
-import org.jkiss.dbeaver.model.text.parser.rules.*;
+import org.jkiss.dbeaver.model.text.parser.rules.EndOfLineRule;
+import org.jkiss.dbeaver.model.text.parser.rules.MultiLineRule;
+import org.jkiss.dbeaver.model.text.parser.rules.NumberRule;
+import org.jkiss.dbeaver.model.text.parser.rules.WhitespaceRule;
 import org.jkiss.dbeaver.utils.GeneralUtils;
 import org.jkiss.utils.ArrayUtils;
 import org.jkiss.utils.CommonUtils;
@@ -45,6 +49,8 @@ import java.util.List;
  * Support runtime change of datasource (reloads syntax information)
  */
 public class SQLRuleManager {
+
+    private static final Log log = Log.getLog(SQLRuleManager.class);
 
     @NotNull
     private TPRule[] allRules = new TPRule[0];
@@ -76,6 +82,10 @@ public class SQLRuleManager {
             }
         }
         return rules.toArray(new TPRule[0]);
+    }
+
+    public void loadRules() {
+        loadRules(null, false);
     }
 
     public void loadRules(@Nullable DBPDataSource dataSource, boolean minimalRules) {
@@ -120,11 +130,15 @@ public class SQLRuleManager {
         if (!minimalRules) {
             final SQLControlToken controlToken = new SQLControlToken();
 
-            String commandPrefix = syntaxManager.getControlCommandPrefix();
+            try {
+                String commandPrefix = syntaxManager.getControlCommandPrefix();
 
-            // Control rules
-            for (SQLCommandHandlerDescriptor controlCommand : SQLCommandsRegistry.getInstance().getCommandHandlers()) {
-                rules.add(new SQLCommandRule(commandPrefix, controlCommand, controlToken)); //$NON-NLS-1$
+                // Control rules
+                for (SQLCommandHandlerDescriptor controlCommand : SQLCommandsRegistry.getInstance().getCommandHandlers()) {
+                    rules.add(new SQLCommandRule(commandPrefix, controlCommand, controlToken)); //$NON-NLS-1$
+                }
+            } catch (Exception e) {
+                log.error(e);
             }
         }
         {
@@ -216,7 +230,7 @@ public class SQLRuleManager {
                 for (String type : dialect.getDataTypes(dataSource)) {
                     wordRule.addWord(type, typeToken);
                 }
-                for (String function : dialect.getFunctions(dataSource)) {
+                for (String function : dialect.getFunctions()) {
                     wordRule.addFunction(function);
                 }
             }

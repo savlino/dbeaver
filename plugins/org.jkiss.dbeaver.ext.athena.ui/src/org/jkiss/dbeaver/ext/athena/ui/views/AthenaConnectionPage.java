@@ -25,6 +25,7 @@ import org.eclipse.swt.layout.GridLayout;
 import org.eclipse.swt.widgets.Combo;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Text;
+import org.jkiss.code.NotNull;
 import org.jkiss.dbeaver.ext.athena.model.AWSRegion;
 import org.jkiss.dbeaver.ext.athena.ui.AthenaActivator;
 import org.jkiss.dbeaver.ext.athena.ui.internal.AthenaMessages;
@@ -35,6 +36,8 @@ import org.jkiss.dbeaver.ui.UIUtils;
 import org.jkiss.dbeaver.ui.dialogs.connection.ConnectionPageWithAuth;
 import org.jkiss.dbeaver.ui.dialogs.connection.DriverPropertiesDialogPage;
 import org.jkiss.utils.CommonUtils;
+
+import java.util.Arrays;
 
 /**
  * AthenaConnectionPage
@@ -75,6 +78,8 @@ public class AthenaConnectionPage extends ConnectionPageWithAuth implements IDia
             s3LocationText = UIUtils.createLabelText(addrGroup, AthenaMessages.label_s3_location, ""); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-1$ //$NON-NLS-1$
             s3LocationText.setToolTipText(AthenaMessages.label_s3_output_location);
             s3LocationText.addModifyListener(textListener);
+
+            UIUtils.addVariablesToControl(s3LocationText, getAvailableVariables(), "S3 location pattern");
         }
 
         createAuthPanel(settingsGroup, 1);
@@ -137,6 +142,11 @@ public class AthenaConnectionPage extends ConnectionPageWithAuth implements IDia
         return new IDialogPage[]{
             driverPropsPage
         };
+    }
+
+    @NotNull
+    private String[] getAvailableVariables() {
+        return Arrays.stream(DBPConnectionConfiguration.CONNECT_VARIABLES).map(x -> x[0]).toArray(String[]::new);
     }
 
 }

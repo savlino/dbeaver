@@ -14,21 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.jkiss.dbeaver.ext.exasol.tasks;
 
-package org.jkiss.dbeaver.model.sql;
+import org.jkiss.dbeaver.ext.exasol.model.ExasolTable;
+import org.jkiss.dbeaver.model.sql.task.SQLToolExecuteSettings;
 
-import org.jkiss.dbeaver.model.DBPContextProvider;
-import org.jkiss.dbeaver.model.IDataSourceContainerProvider;
-
-import java.util.Map;
-
-/**
- * SQLQuery container.
- */
-public interface SQLQueryContainer extends IDataSourceContainerProvider, DBPContextProvider {
-
-    SQLScriptElement getQuery();
-
-    Map<String, Object> getQueryParameters();
-
+class ExasolToolTableTruncateSettings extends SQLToolExecuteSettings<ExasolTable> {
 }

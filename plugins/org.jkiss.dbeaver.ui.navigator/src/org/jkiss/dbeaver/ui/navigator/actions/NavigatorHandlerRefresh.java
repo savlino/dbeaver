@@ -25,7 +25,9 @@ import org.eclipse.core.runtime.jobs.Job;
 import org.eclipse.jface.dialogs.IDialogConstants;
 import org.eclipse.jface.viewers.ISelection;
 import org.eclipse.jface.viewers.IStructuredSelection;
+import org.eclipse.ui.IEditorInput;
 import org.eclipse.ui.IEditorPart;
+import org.eclipse.ui.IEditorReference;
 import org.eclipse.ui.IWorkbenchPart;
 import org.eclipse.ui.handlers.HandlerUtil;
 import org.jkiss.dbeaver.DBException;
@@ -33,12 +35,14 @@ import org.jkiss.dbeaver.Log;
 import org.jkiss.dbeaver.model.navigator.*;
 import org.jkiss.dbeaver.model.runtime.AbstractJob;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
+import org.jkiss.dbeaver.model.struct.DBSObject;
 import org.jkiss.dbeaver.runtime.DBWorkbench;
 import org.jkiss.dbeaver.ui.IRefreshablePart;
 import org.jkiss.dbeaver.ui.UIConfirmation;
 import org.jkiss.dbeaver.ui.UIUtils;
 import org.jkiss.dbeaver.ui.dialogs.ConfirmationDialog;
 import org.jkiss.dbeaver.ui.editors.DatabaseEditorInput;
+import org.jkiss.dbeaver.ui.editors.IDatabaseEditor;
 import org.jkiss.dbeaver.ui.editors.IDatabaseEditorInput;
 import org.jkiss.dbeaver.ui.internal.UINavigatorMessages;
 import org.jkiss.dbeaver.ui.navigator.INavigatorModelView;
@@ -59,19 +63,39 @@ public class NavigatorHandlerRefresh extends AbstractHandler {
         //final IWorkbenchWindow workbenchWindow = HandlerUtil.getActiveWorkbenchWindow(event);
         final IWorkbenchPart workbenchPart = HandlerUtil.getActivePart(event);
 
+        // If navigator refresh is possible then do not refresh active part directly
+        // Because active part should be refresh in navigator event handler
+        if (refreshInNavigator(event, workbenchPart)) {
+            return null;
+        }
+
         // Try to refresh as refreshable part
         if (workbenchPart instanceof IRefreshablePart) {
+            if (workbenchPart instanceof IDatabaseEditor) {
+                IEditorInput editorInput = ((IDatabaseEditor) workbenchPart).getEditorInput();
+                if (editorInput instanceof IDatabaseEditorInput) {
+                    DBSObject databaseObject = ((IDatabaseEditorInput) editorInput).getDatabaseObject();
+                    if (databaseObject == null || !databaseObject.isPersisted()) {
+                        // Do not refresh non-persistent objects
+                        return null;
+                    }
+                }
+            }
             if (((IRefreshablePart) workbenchPart).refreshPart(this, true) == IRefreshablePart.RefreshResult.CANCELED) {
                 return null;
             }
             //return null;
         }
 
+        return null;
+    }
+
+    private boolean refreshInNavigator(ExecutionEvent event, IWorkbenchPart workbenchPart) {
         // Try to get navigator view and refresh node
         INavigatorModelView navigatorView = GeneralUtils.adapt(workbenchPart, INavigatorModelView.class);
         if (navigatorView == null) {
             // Nothing to refresh
-            return null;
+            return false;
         }
         final List<DBNNode> refreshObjects = new ArrayList<>();
         final ISelection selection = HandlerUtil.getCurrentSelection(event);
@@ -98,16 +122,18 @@ public class NavigatorHandlerRefresh extends AbstractHandler {
 
         // Check for open editors with selected objects
         if (!refreshObjects.isEmpty()) {
-            final IEditorPart editorPart = HandlerUtil.getActiveEditor(event);
-            if (editorPart instanceof IRefreshablePart && editorPart.getEditorInput() instanceof DatabaseEditorInput && editorPart.isDirty()) {
-                DBNDatabaseNode editorNode = ((DatabaseEditorInput<?>) editorPart.getEditorInput()).getNavigatorNode();
-                for (Iterator<DBNNode> iter = refreshObjects.iterator(); iter.hasNext(); ) {
-                    DBNNode nextNode = iter.next();
-                    if (nextNode == editorNode || editorNode.isChildOf(nextNode) || nextNode.isChildOf(editorNode)) {
-                        if (((IRefreshablePart) editorPart).refreshPart(this, true) == IRefreshablePart.RefreshResult.CANCELED) {
-                            return null;
+            for (IEditorReference er : UIUtils.getActiveWorkbenchWindow().getActivePage().getEditorReferences()) {
+                IEditorPart editorPart = er.getEditor(false);
+                if (editorPart instanceof IRefreshablePart && editorPart.getEditorInput() instanceof DatabaseEditorInput && editorPart.isDirty()) {
+                    DBNDatabaseNode editorNode = ((DatabaseEditorInput<?>) editorPart.getEditorInput()).getNavigatorNode();
+                    for (Iterator<DBNNode> iter = refreshObjects.iterator(); iter.hasNext(); ) {
+                        DBNNode nextNode = iter.next();
+                        if (nextNode == editorNode || editorNode.isChildOf(nextNode) || nextNode.isChildOf(editorNode)) {
+                            if (((IRefreshablePart) editorPart).refreshPart(this, true) == IRefreshablePart.RefreshResult.CANCELED) {
+                                return true;
+                            }
+                            iter.remove();
                         }
-                        iter.remove();
                     }
                 }
             }
@@ -115,13 +141,12 @@ public class NavigatorHandlerRefresh extends AbstractHandler {
 
         // Refresh objects
         if (!refreshObjects.isEmpty()) {
-            refreshNavigator(refreshObjects);
+            return refreshNavigator(refreshObjects);
         }
-
-        return null;
+        return false;
     }
 
-    public static void refreshNavigator(final Collection<? extends DBNNode> refreshObjects)
+    public static boolean refreshNavigator(final Collection<? extends DBNNode> refreshObjects)
     {
         Job refreshJob = new AbstractJob("Refresh navigator object(s)") {
             @Override
@@ -184,6 +209,8 @@ public class NavigatorHandlerRefresh extends AbstractHandler {
         };
         refreshJob.setUser(true);
         refreshJob.schedule();
+
+        return true;
     }
 
     private static boolean showConfirmation(DBNNode node) {

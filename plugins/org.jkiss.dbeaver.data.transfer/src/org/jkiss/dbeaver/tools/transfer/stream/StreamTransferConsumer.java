@@ -32,6 +32,7 @@ import org.jkiss.dbeaver.model.runtime.DBRProcessDescriptor;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.runtime.DBRRunnableContext;
 import org.jkiss.dbeaver.model.runtime.DBRShellCommand;
+import org.jkiss.dbeaver.model.sql.SQLQueryContainer;
 import org.jkiss.dbeaver.model.struct.DBSAttributeBase;
 import org.jkiss.dbeaver.model.struct.DBSDataContainer;
 import org.jkiss.dbeaver.model.struct.DBSObject;
@@ -47,6 +48,7 @@ import org.jkiss.dbeaver.utils.ContentUtils;
 import org.jkiss.dbeaver.utils.GeneralUtils;
 import org.jkiss.dbeaver.utils.RuntimeUtils;
 import org.jkiss.utils.Base64;
+import org.jkiss.utils.CommonUtils;
 import org.jkiss.utils.IOUtils;
 import org.jkiss.utils.io.ByteOrderMark;
 
@@ -81,6 +83,32 @@ public class StreamTransferConsumer implements IDataTransferConsumer<StreamConsu
     public static final String VARIABLE_PROJECT = "project";
     public static final String VARIABLE_CONN_TYPE = "connectionType";
     public static final String VARIABLE_FILE = "file";
+    public static final String VARIABLE_SCRIPT_FILE = "scriptFilename";
+
+    public static final String VARIABLE_YEAR = "year";
+    public static final String VARIABLE_MONTH = "month";
+    public static final String VARIABLE_DAY = "day";
+    public static final String VARIABLE_HOUR = "hour";
+    public static final String VARIABLE_MINUTE = "minute";
+
+    public static final String[][] VARIABLES = {
+        {VARIABLE_DATASOURCE, "source database datasource"},
+        {VARIABLE_CATALOG, "source database catalog"},
+        {VARIABLE_SCHEMA, "source database schema"},
+        {VARIABLE_TABLE, "source database table"},
+        {VARIABLE_INDEX, "index of current file (if split is used)"},
+        {VARIABLE_PROJECT, "source database project"},
+        {VARIABLE_CONN_TYPE, "source database connection type"},
+        {VARIABLE_FILE, "output file path"},
+        {VARIABLE_SCRIPT_FILE, "source script filename"},
+        {VARIABLE_TIMESTAMP, "current timestamp"},
+        {VARIABLE_DATE, "current date"},
+        {VARIABLE_YEAR, "current year"},
+        {VARIABLE_MONTH, "current month"},
+        {VARIABLE_DAY, "current day"},
+        {VARIABLE_HOUR, "current hour"},
+        {VARIABLE_MINUTE, "current minute"},
+    };
 
     public static final int OUT_FILE_BUFFER_SIZE = 100000;
 
@@ -103,6 +131,7 @@ public class StreamTransferConsumer implements IDataTransferConsumer<StreamConsu
     private Map<String, Object> processorProperties;
     private StringWriter outputBuffer;
     private boolean initialized = false;
+    private boolean firstRow = true;
     private TransferParameters parameters;
 
     public StreamTransferConsumer() {
@@ -153,6 +182,15 @@ public class StreamTransferConsumer implements IDataTransferConsumer<StreamConsu
     @Override
     public void fetchRow(DBCSession session, DBCResultSet resultSet) throws DBCException {
         try {
+            // Check for file split
+            if (settings.isSplitOutFiles() && !parameters.isBinary && !firstRow) {
+                writer.flush();
+                if (bytesWritten >= settings.getMaxOutFileSize()) {
+                    // Make new file
+                    createNewOutFile();
+                }
+            }
+
             // Get values
             Object[] srcRow = fetchRow(session, resultSet, columnMetas);
             Object[] targetRow;
@@ -188,15 +226,7 @@ public class StreamTransferConsumer implements IDataTransferConsumer<StreamConsu
             }
             // Export row
             processor.exportRow(session, resultSet, targetRow);
-
-            // Check for file split
-            if (settings.isSplitOutFiles() && !parameters.isBinary) {
-                writer.flush();
-                if (bytesWritten >= settings.getMaxOutFileSize()) {
-                    // Make new file
-                    createNewOutFile();
-                }
-            }
+            firstRow = false;
         } catch (IOException e) {
             throw new DBCException("IO error", e);
         } catch (Throwable e) {
@@ -220,7 +250,7 @@ public class StreamTransferConsumer implements IDataTransferConsumer<StreamConsu
             return null;
         }
         if (lobDirectory == null) {
-            lobDirectory = new File(settings.getOutputFolder(), LOB_DIRECTORY_NAME);
+            lobDirectory = new File(getOutputFolder(), LOB_DIRECTORY_NAME);
             if (!lobDirectory.exists()) {
                 if (!lobDirectory.mkdir()) {
                     throw new IOException("Can't create directory for CONTENT files: " + lobDirectory.getAbsolutePath());
@@ -408,7 +438,7 @@ public class StreamTransferConsumer implements IDataTransferConsumer<StreamConsu
         } else {
             if (settings.isOpenFolderOnFinish() && !DBWorkbench.getPlatform().getApplication().isHeadlessMode()) {
                 // Last one
-                DBWorkbench.getPlatformUI().executeShellProgram(settings.getOutputFolder());
+                DBWorkbench.getPlatformUI().showInSystemExplorer(outputFile.toString());
             }
         }
     }
@@ -459,6 +489,16 @@ public class StreamTransferConsumer implements IDataTransferConsumer<StreamConsu
         return settings.isOutputClipboard() ? DBIcon.TYPE_TEXT : DBIcon.TREE_FOLDER;
     }
 
+    @Override
+    public boolean isConfigurationComplete() {
+        return true;
+    }
+
+    @NotNull
+    public String getOutputFolder() {
+        return translatePattern(settings.getOutputFolder(), null);
+    }
+
     public String getOutputFileName() {
         Object extension = processorProperties == null ? null : processorProperties.get(StreamConsumerSettings.PROP_FILE_EXTENSION);
         String fileName = translatePattern(
@@ -479,7 +519,7 @@ public class StreamTransferConsumer implements IDataTransferConsumer<StreamConsu
     }
 
     public File makeOutputFile() {
-        File dir = new File(settings.getOutputFolder());
+        File dir = new File(getOutputFolder());
         if (!dir.exists() && !dir.mkdirs()) {
             log.error("Can't create output directory '" + dir.getAbsolutePath() + "'");
         }
@@ -491,6 +531,14 @@ public class StreamTransferConsumer implements IDataTransferConsumer<StreamConsu
     }
 
     private String translatePattern(String pattern, final File targetFile) {
+        final Date ts;
+        if (parameters.startTimestamp != null) {
+            // Use saved timestamp (#7352)
+            ts = parameters.startTimestamp;
+        } else {
+            ts = new Date();
+        }
+
         return GeneralUtils.replaceVariables(pattern, name -> {
             switch (name) {
                 case VARIABLE_DATASOURCE: {
@@ -529,13 +577,6 @@ public class StreamTransferConsumer implements IDataTransferConsumer<StreamConsu
                     return stripObjectName(tableName);
                 }
                 case VARIABLE_TIMESTAMP:
-                    Date ts;
-                    if (parameters.startTimestamp != null) {
-                        // Use saved timestamp (#7352)
-                        ts = parameters.startTimestamp;
-                    } else {
-                        ts = new Date();
-                    }
                     try {
                         SimpleDateFormat sdf = new SimpleDateFormat(settings.getOutputTimestampPattern());
                         return sdf.format(ts);
@@ -545,6 +586,16 @@ public class StreamTransferConsumer implements IDataTransferConsumer<StreamConsu
                     }
                 case VARIABLE_DATE:
                     return RuntimeUtils.getCurrentDate();
+                case VARIABLE_YEAR:
+                    return new SimpleDateFormat("yyyy").format(ts);
+                case VARIABLE_MONTH:
+                    return new SimpleDateFormat("MM").format(ts);
+                case VARIABLE_DAY:
+                    return new SimpleDateFormat("dd").format(ts);
+                case VARIABLE_HOUR:
+                    return new SimpleDateFormat("HH").format(ts);
+                case VARIABLE_MINUTE:
+                    return new SimpleDateFormat("mm").format(ts);
                 case VARIABLE_INDEX:
                     return String.valueOf(parameters.orderNumber + 1);
                 case VARIABLE_PROJECT: {
@@ -556,11 +607,29 @@ public class StreamTransferConsumer implements IDataTransferConsumer<StreamConsu
                 }
                 case VARIABLE_FILE:
                     return targetFile == null ? "" : targetFile.getAbsolutePath();
+                case VARIABLE_SCRIPT_FILE: {
+                    final SQLQueryContainer container = DBUtils.getAdapter(SQLQueryContainer.class, dataContainer);
+                    if (container != null) {
+                        final File file = container.getScriptContext().getSourceFile();
+                        if (file != null) {
+                            String filename = file.getName();
+                            if (filename.indexOf('.') >= 0) {
+                                filename = filename.substring(0, filename.lastIndexOf('.'));
+                            }
+                            return filename;
+                        }
+                    }
+                    break;
+                }
                 case VARIABLE_CONN_TYPE:
                     if (dataContainer == null) {
                         return null;
                     }
                     return dataContainer.getDataSource().getContainer().getConnectionConfiguration().getConnectionType().getId();
+            }
+            final SQLQueryContainer container = DBUtils.getAdapter(SQLQueryContainer.class, dataContainer);
+            if (container != null) {
+                return CommonUtils.toString(container.getQueryParameters().get(name));
             }
             return null;
         });

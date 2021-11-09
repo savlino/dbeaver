@@ -63,6 +63,7 @@ import org.jkiss.dbeaver.registry.internal.RegistryMessages;
 import org.jkiss.dbeaver.runtime.DBWorkbench;
 import org.jkiss.dbeaver.runtime.IVariableResolver;
 import org.jkiss.dbeaver.runtime.properties.PropertyCollector;
+import org.jkiss.dbeaver.utils.RuntimeUtils;
 import org.jkiss.dbeaver.utils.SystemVariablesResolver;
 import org.jkiss.utils.CommonUtils;
 
@@ -85,27 +86,6 @@ public class DataSourceDescriptor
 {
     private static final Log log = Log.getLog(DataSourceDescriptor.class);
 
-    public static final String[][] CONNECT_VARIABLES = new String[][]{
-        {DBPConnectionConfiguration.VARIABLE_HOST, "target database host"},
-        {DBPConnectionConfiguration.VARIABLE_PORT, "target database port"},
-        {DBPConnectionConfiguration.VARIABLE_SERVER, "target server name"},
-        {DBPConnectionConfiguration.VARIABLE_DATABASE, "target database name"},
-        {DBPConnectionConfiguration.VARIABLE_USER, "database user name"},
-        {DBPConnectionConfiguration.VARIABLE_PASSWORD, "database password (plain)"},
-        {DBPConnectionConfiguration.VARIABLE_URL, "connection URL"},
-        {DBPConnectionConfiguration.VARIABLE_CONN_TYPE, "connection type"},
-
-        {DBPConnectionConfiguration.VAR_PROJECT_PATH, "project path"},
-        {DBPConnectionConfiguration.VAR_PROJECT_NAME, "project name"},
-
-        {SystemVariablesResolver.VAR_WORKSPACE, "workspace path"},
-        {SystemVariablesResolver.VAR_HOME, "OS user home path"},
-        {SystemVariablesResolver.VAR_DBEAVER_HOME, "application install path"},
-        {SystemVariablesResolver.VAR_APP_PATH, "application install path"},
-        {SystemVariablesResolver.VAR_APP_NAME, "application name"},
-        {SystemVariablesResolver.VAR_APP_VERSION, "application version"},
-        {SystemVariablesResolver.VAR_LOCAL_IP, "local IP address"},
-    };
     public static final String CATEGORY_CONNECTIONS = "Connections";
     public static final String CATEGORY_SERVER = "Server";
     public static final String CATEGORY_DRIVER = "Driver";
@@ -1450,7 +1430,7 @@ public class DataSourceDescriptor
             return false;
         }
         DataSourceDescriptor source = (DataSourceDescriptor) obj;
-        return 
+        return
             CommonUtils.equalOrEmptyStrings(this.name, source.name) &&
             CommonUtils.equalOrEmptyStrings(this.description, source.description) &&
             CommonUtils.equalObjects(this.savePassword, source.savePassword) &&
@@ -1504,6 +1484,7 @@ public class DataSourceDescriptor
                 case DBPConnectionConfiguration.VARIABLE_PASSWORD: return configuration.getUserPassword();
                 case DBPConnectionConfiguration.VARIABLE_URL: return configuration.getUrl();
                 case DBPConnectionConfiguration.VARIABLE_CONN_TYPE: return configuration.getConnectionType().getId();
+                case DBPConnectionConfiguration.VARIABLE_DATE: return RuntimeUtils.getCurrentDate();
                 default: return SystemVariablesResolver.INSTANCE.get(name);
             }
         };

@@ -20,7 +20,6 @@ import org.apache.commons.cli.*;
 import org.eclipse.core.runtime.IConfigurationElement;
 import org.eclipse.core.runtime.IExtensionRegistry;
 import org.eclipse.core.runtime.Platform;
-import org.jkiss.code.NotNull;
 import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.Log;
 import org.jkiss.dbeaver.ui.actions.datasource.ConnectionCommands;
@@ -140,8 +139,8 @@ public class DBeaverCommandLine
     /**
      * @return true if called should exit after CLI processing
      */
-    static boolean executeCommandLineCommands(@NotNull CommandLine commandLine, @Nullable IInstanceController controller, boolean uiActivated) throws Exception {
-        if (commandLine == null) {
+    static boolean executeCommandLineCommands(@Nullable CommandLine commandLine, @Nullable IInstanceController controller, boolean uiActivated) throws Exception {
+        if (commandLine == null || (ArrayUtils.isEmpty(commandLine.getArgs()) && ArrayUtils.isEmpty(commandLine.getOptions()))) {
             return false;
         }
 
@@ -152,8 +151,10 @@ public class DBeaverCommandLine
         }
 
         if (controller == null) {
+            log.debug("Can't process commands because no running instance is present");
             return false;
         }
+
         boolean exitAfterExecute = false;
         if (!uiActivated) {
             // These command can't be executed locally
@@ -250,13 +251,7 @@ public class DBeaverCommandLine
             return false;
         }
 
-        IInstanceController controller = null;
-        try {
-            controller = InstanceClient.createClient(instanceLoc);
-        } catch (Exception e) {
-            // its ok
-            log.debug("Error detecting DBeaver running instance: " + e.getMessage());
-        }
+        final IInstanceController controller = InstanceClient.createClient(instanceLoc);
         try {
             return executeCommandLineCommands(commandLine, controller, false);
         } catch (RemoteException e) {
@@ -285,11 +280,13 @@ public class DBeaverCommandLine
                 if (param.hasArg) {
                     for (String optValue : commandLine.getOptionValues(param.name)) {
                         param.handler.handleParameter(
+                            commandLine,
                             param.name,
                             optValue);
                     }
                 } else {
                     param.handler.handleParameter(
+                        commandLine,
                         param.name,
                         null);
                 }

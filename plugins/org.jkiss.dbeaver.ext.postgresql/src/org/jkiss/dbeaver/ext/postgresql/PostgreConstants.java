@@ -39,6 +39,7 @@ public class PostgreConstants {
     public static final String DEFAULT_DATABASE = "postgres";
     public static final String DEFAULT_DATA_TYPE = "varchar";
     public static final String DEFAULT_USER = "postgres";
+    public static final String USER_VARIABLE = "$user";
 
     public static final String PROP_CHOSEN_ROLE = DBConstants.INTERNAL_PROP_PREFIX + "chosen-role@";
     public static final String PROP_SHOW_NON_DEFAULT_DB = DBConstants.INTERNAL_PROP_PREFIX + "show-non-default-db@";
@@ -86,9 +87,13 @@ public class PostgreConstants {
     public static final String PG_INTERVAL_CLASS = "org.postgresql.util.PGInterval";
     public static final String PG_GEOMETRY_CLASS = "org.postgis.PGgeometry";
 
+    // Workaround for Redshift 2.x
+    public static final String RS_OBJECT_CLASS = "com.amazon.redshift.util.RedshiftObject";
+
     public static final DBDPseudoAttribute PSEUDO_ATTR_OID = new DBDPseudoAttribute(DBDPseudoAttributeType.ROWID, "oid",
         "oid", "oid", "Row identifier", false);
 
+    public static final String TYPE_CHAR = "char";
     public static final String TYPE_UUID = "uuid";
     public static final String TYPE_BPCHAR = "bpchar";
     public static final String TYPE_VARCHAR = "varchar";

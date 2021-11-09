@@ -65,12 +65,6 @@ class MySQLExportWizardPageObjects extends MySQLWizardPageSettings<MySQLExportWi
     }
 
     @Override
-    public boolean isPageComplete()
-    {
-        return super.isPageComplete();
-    }
-
-    @Override
     public void createControl(Composite parent)
     {
         Composite composite = UIUtils.createPlaceholder(parent, 1);
@@ -207,8 +201,11 @@ class MySQLExportWizardPageObjects extends MySQLWizardPageSettings<MySQLExportWi
                 checkedTables.add((MySQLTableBase) item.getData());
             }
         }
-        TableItem catalogItem = catalogTable.getItem(catalogTable.getSelectionIndex());
-        catalogItem.setChecked(!checkedTables.isEmpty());
+        int selectionIndex = catalogTable.getSelectionIndex();
+        if (selectionIndex > -1) {
+            TableItem catalogItem = catalogTable.getItem(selectionIndex);
+            catalogItem.setChecked(!checkedTables.isEmpty());
+        }
         if (checkedTables.isEmpty() || checkedTables.size() == tableItems.length) {
             checkedObjects.remove(curCatalog);
         } else {

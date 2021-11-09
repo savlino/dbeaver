@@ -19,7 +19,6 @@ package org.jkiss.dbeaver.model.sql;
 import org.jkiss.code.NotNull;
 import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.ModelPreferences;
-import org.jkiss.dbeaver.model.DBPDataSource;
 import org.jkiss.dbeaver.model.DBPIdentifierCase;
 import org.jkiss.dbeaver.model.impl.sql.BasicSQLDialect;
 import org.jkiss.dbeaver.model.preferences.DBPPreferenceStore;
@@ -133,10 +132,6 @@ public class SQLSyntaxManager {
         return variablesEnabled;
     }
 
-    public void init(@NotNull DBPDataSource dataSource) {
-        init(SQLUtils.getDialectFromObject(dataSource), dataSource.getContainer().getPreferenceStore());
-    }
-
     public void init(@NotNull SQLDialect dialect, @NotNull DBPPreferenceStore preferenceStore)
     {
         this.statementDelimiters = new String[0];
@@ -155,7 +150,7 @@ public class SQLSyntaxManager {
             }
         }
 
-        String extraDelimiters = preferenceStore.getString(ModelPreferences.SCRIPT_STATEMENT_DELIMITER);
+        String extraDelimiters = CommonUtils.toString(preferenceStore.getString(ModelPreferences.SCRIPT_STATEMENT_DELIMITER), SQLConstants.DEFAULT_STATEMENT_DELIMITER);
         StringTokenizer st = new StringTokenizer(extraDelimiters, " \t,");
         while (st.hasMoreTokens()) {
             String delim = st.nextToken();

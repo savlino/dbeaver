@@ -46,9 +46,6 @@ import java.net.URL;
 import java.util.*;
 import java.util.stream.Collectors;
 
-//import org.eclipse.ui.PlatformUI;
-//import org.eclipse.ui.activities.IActivityManager;
-
 public class DataSourceProviderRegistry implements DBPDataSourceProviderRegistry
 {
     private static final Log log = Log.getLog(DataSourceProviderRegistry.class);
@@ -538,7 +535,7 @@ public class DataSourceProviderRegistry implements DBPDataSourceProviderRegistry
         for (DataSourceAuthModelDescriptor amd : authModels.values()) {
             if (amd.appliesTo(driver)) {
                 models.add(amd);
-                replaced.addAll(amd.getReplaces());
+                replaced.addAll(amd.getReplaces(driver));
             }
         }
         if (!replaced.isEmpty()) {

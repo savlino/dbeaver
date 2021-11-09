@@ -26,7 +26,10 @@ import org.jkiss.dbeaver.model.impl.data.formatters.BinaryFormatterHexNative;
 import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.sql.*;
 import org.jkiss.dbeaver.model.sql.parser.SQLSemanticProcessor;
-import org.jkiss.dbeaver.model.struct.*;
+import org.jkiss.dbeaver.model.struct.DBSDataType;
+import org.jkiss.dbeaver.model.struct.DBSObject;
+import org.jkiss.dbeaver.model.struct.DBSTypedObject;
+import org.jkiss.dbeaver.model.struct.DBSTypedObjectEx;
 import org.jkiss.dbeaver.model.struct.rdb.DBSProcedure;
 import org.jkiss.dbeaver.model.struct.rdb.DBSProcedureParameter;
 import org.jkiss.dbeaver.model.struct.rdb.DBSProcedureParameterKind;
@@ -168,7 +171,7 @@ public abstract class AbstractSQLDialect implements SQLDialect {
 
     @NotNull
     @Override
-    public Set<String> getFunctions(@Nullable DBPDataSource dataSource) {
+    public Set<String> getFunctions() {
         return functions;
     }
 
@@ -418,13 +421,17 @@ public abstract class AbstractSQLDialect implements SQLDialect {
             return str;
         }
 
+        return quoteIdentifier(str, quoteStrings);
+    }
+
+    @NotNull
+    protected String quoteIdentifier(@NotNull String str, @NotNull String[][] quoteStrings) {
         // Escape quote chars
-        for (int i = 0; i < quoteStrings.length; i++) {
-            String q1 = quoteStrings[i][0], q2 = quoteStrings[i][1];
-            if (q1.equals(q2) && (q1.equals("\"") || q1.equals("'"))) {
-                if (str.contains(q1)) {
-                    str = str.replace(q1, q1 + q1);
-                }
+        for (String[] pair : quoteStrings) {
+            final String q1 = pair[0];
+            final String q2 = pair[1];
+            if (q1.equals(q2) && (q1.equals("\"") || q1.equals("'")) && str.contains(q1)) {
+                str = str.replace(q1, q1 + q1);
             }
         }
         // Escape with first (default) quote string

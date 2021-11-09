@@ -99,6 +99,10 @@ public class UIIcon {
     public static final DBIcon SORT = new DBIcon("sort", "misc/sort.png"); //$NON-NLS-1$ //$NON-NLS-2$
     public static final DBIcon SORT_CONFIG = new DBIcon("sort_config", "misc/sort_config.png"); //$NON-NLS-1$ //$NON-NLS-2$
 
+    public static final DBIcon ALIGN_TO_LEFT = new DBIcon("align_to_left", "misc/align_to_left.png"); //$NON-NLS-1$ //$NON-NLS-2$
+    public static final DBIcon ALIGN_TO_CENTER = new DBIcon("align_to_center", "misc/align_to_center.png"); //$NON-NLS-1$ //$NON-NLS-2$
+    public static final DBIcon ALIGN_TO_RIGHT = new DBIcon("align_to_right", "misc/align_to_right.png"); //$NON-NLS-1$ //$NON-NLS-2$
+
     public static final DBIcon FILTER = new DBIcon("misc/filter.png"); //$NON-NLS-1$ //$NON-NLS-2$
     public static final DBIcon FILTER_SMALL = new DBIcon("misc/filter_small.png"); //$NON-NLS-1$ //$NON-NLS-2$
     public static final DBIcon FILTER_VALUE = new DBIcon("misc/filter_value.png"); //$NON-NLS-1$ //$NON-NLS-2$
@@ -126,6 +130,7 @@ public class UIIcon {
     public static final DBIcon EXPORT = new DBIcon("export", "file/export.png"); //$NON-NLS-1$ //$NON-NLS-2$
     public static final DBIcon REFRESH = new DBIcon("refresh", "/refresh.png"); //$NON-NLS-1$ //$NON-NLS-2$
     public static final DBIcon CONFIRM = new DBIcon("confirm", "misc/confirm.png"); //$NON-NLS-1$ //$NON-NLS-2$
+    public static final DBIcon OK_MARK = new DBIcon("ok_mark", "misc/ok_mark.png"); //$NON-NLS-1$ //$NON-NLS-2$
     public static final DBIcon CLOSE = new DBIcon("close", "misc/close.png"); //$NON-NLS-1$ //$NON-NLS-2$
     public static final DBIcon SOURCES = new DBIcon("sources", "misc/sources.png"); //$NON-NLS-1$ //$NON-NLS-2$
     public static final DBIcon CANCEL = new DBIcon("cancel", "misc/cancel.png"); //$NON-NLS-1$ //$NON-NLS-2$

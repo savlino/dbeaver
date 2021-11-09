@@ -125,6 +125,7 @@ public final class ModelPreferences
     public static final String UI_PROXY_USER = "ui.proxy.user"; //$NON-NLS-1$
     public static final String UI_PROXY_PASSWORD = "ui.proxy.password"; //$NON-NLS-1$
     public static final String UI_DRIVERS_SOURCES = "ui.drivers.sources"; //$NON-NLS-1$
+    public static final String UI_DRIVERS_GLOBAL_LIBRARIES = "ui.drivers.global.libraries"; //$NON-NLS-1$
     public static final String UI_MAVEN_REPOSITORIES = "ui.maven.repositories"; //$NON-NLS-1$
 
     public static final String NAVIGATOR_SHOW_FOLDER_PLACEHOLDERS = "navigator.show.folder.placeholders"; //$NON-NLS-1$
@@ -149,6 +150,10 @@ public final class ModelPreferences
             setMainBundle(ModelActivator.getInstance().getBundle());
         }
         return preferences;
+    }
+
+    public static void setPreferences(DBPPreferenceStore preferences) {
+        ModelPreferences.preferences = preferences;
     }
 
     public static void setMainBundle(Bundle mainBundle) {

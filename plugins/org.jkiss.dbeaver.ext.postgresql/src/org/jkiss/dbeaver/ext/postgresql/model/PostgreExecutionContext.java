@@ -25,6 +25,7 @@ import org.jkiss.dbeaver.model.connection.DBPConnectionBootstrap;
 import org.jkiss.dbeaver.model.exec.DBCException;
 import org.jkiss.dbeaver.model.exec.DBCExecutionContextDefaults;
 import org.jkiss.dbeaver.model.exec.DBCExecutionPurpose;
+import org.jkiss.dbeaver.model.exec.DBExecUtils;
 import org.jkiss.dbeaver.model.exec.jdbc.JDBCPreparedStatement;
 import org.jkiss.dbeaver.model.exec.jdbc.JDBCResultSet;
 import org.jkiss.dbeaver.model.exec.jdbc.JDBCSession;
@@ -35,6 +36,7 @@ import org.jkiss.dbeaver.model.runtime.DBRProgressMonitor;
 import org.jkiss.dbeaver.model.struct.DBSObject;
 import org.jkiss.utils.CommonUtils;
 
+import java.lang.reflect.InvocationTargetException;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
@@ -193,6 +195,7 @@ public class PostgreExecutionContext extends JDBCExecutionContext implements DBC
             }
 
             if (defaultSearchPath.isEmpty()) {
+                setUserInTheEndOfThePath(searchPath);
                 defaultSearchPath = new ArrayList<>(searchPath);
             }
 
@@ -243,9 +246,8 @@ public class PostgreExecutionContext extends JDBCExecutionContext implements DBC
                 // Remove from previous position
                 newSearchPath.remove(schemaIndex);
             }
-            // Add it first (or after $user)
-            int newIndex = isUserFirstInPath(newSearchPath) ? 1 : 0;
-            newSearchPath.add(newIndex, defSchemaName);
+            // Add it first
+            newSearchPath.add(0, defSchemaName);
         }
 
         StringBuilder spString = new StringBuilder();
@@ -254,14 +256,42 @@ public class PostgreExecutionContext extends JDBCExecutionContext implements DBC
             spString.append(DBUtils.getQuotedIdentifier(getDataSource(), sp));
         }
         try (JDBCSession session = openSession(monitor, DBCExecutionPurpose.UTIL, "Change search path")) {
-            JDBCUtils.executeSQL(session, "SET search_path = " + spString);
-        } catch (SQLException e) {
+            DBExecUtils.tryExecuteRecover(session, session.getDataSource(), param -> {
+                try {
+                    JDBCUtils.executeSQL(session, "SET search_path = " + spString);
+                } catch (SQLException e) {
+                    throw new InvocationTargetException(e);
+                }
+            });
+        } catch (DBException e) {
             throw new DBCException("Error setting search path", e, this);
         }
     }
 
     private static boolean isUserFirstInPath(List<String> newSearchPath) {
-        return !newSearchPath.isEmpty() && newSearchPath.get(0).equals("$user");
+        return !newSearchPath.isEmpty() && newSearchPath.get(0).equals(PostgreConstants.USER_VARIABLE);
+    }
+
+    private void setUserInTheEndOfThePath(List<String> searchPath) {
+        if (CommonUtils.isEmpty(searchPath)) {
+            return;
+        }
+        if (isUserFirstInPath(searchPath)) {
+            searchPath.remove(0);
+            searchPath.add(PostgreConstants.USER_VARIABLE);
+        } else {
+            int userIndex = -1;
+            for (int i = 0; i < searchPath.size(); i++) {
+                if (searchPath.get(i).equals(PostgreConstants.USER_VARIABLE)) {
+                    userIndex = i;
+                    break;
+                }
+            }
+            if (userIndex != -1) {
+                searchPath.remove(userIndex);
+                searchPath.add(PostgreConstants.USER_VARIABLE);
+            }
+        }
     }
 
     private void setSearchPath(String path) {

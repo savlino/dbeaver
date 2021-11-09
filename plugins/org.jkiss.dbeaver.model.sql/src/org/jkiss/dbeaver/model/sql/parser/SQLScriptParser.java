@@ -18,11 +18,12 @@
 package org.jkiss.dbeaver.model.sql.parser;
 
 import org.eclipse.jface.text.*;
+import org.jkiss.code.NotNull;
 import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.Log;
 import org.jkiss.dbeaver.ModelPreferences;
-import org.jkiss.dbeaver.model.DBPContextProvider;
-import org.jkiss.dbeaver.model.exec.DBCExecutionContext;
+import org.jkiss.dbeaver.model.DBPDataSource;
+import org.jkiss.dbeaver.model.preferences.DBPPreferenceStore;
 import org.jkiss.dbeaver.model.sql.*;
 import org.jkiss.dbeaver.model.sql.parser.tokens.SQLControlToken;
 import org.jkiss.dbeaver.model.sql.parser.tokens.SQLTokenType;
@@ -37,6 +38,7 @@ import org.jkiss.utils.CommonUtils;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.StringJoiner;
 import java.util.regex.Matcher;
 
 /**
@@ -511,13 +513,25 @@ public class SQLScriptParser
 
     @Nullable
     public static SQLScriptElement extractActiveQuery(SQLParserContext context, int selOffset, int selLength) {
+        return extractActiveQuery(context, new IRegion[]{new Region(selOffset, selLength)});
+    }
+
+    @Nullable
+    public static SQLScriptElement extractActiveQuery(@NotNull SQLParserContext context, @NotNull IRegion[] regions) {
         String selText = null;
-        if (selOffset >= 0 && selLength > 0) {
-            try {
-                selText = context.getDocument().get(selOffset, selLength);
-            } catch (BadLocationException e) {
-                log.debug(e);
+
+        try {
+            final StringJoiner text = new StringJoiner(CommonUtils.getLineSeparator());
+            for (IRegion region : regions) {
+                if (region.getOffset() >= 0 && region.getLength() > 0) {
+                    text.add(context.getDocument().get(region.getOffset(), region.getLength()));
+                }
             }
+            if (text.length() > 0) {
+                selText = text.toString();
+            }
+        } catch (BadLocationException e) {
+            log.debug(e);
         }
 
         if (selText != null && context.getPreferenceStore().getBoolean(ModelPreferences.QUERY_REMOVE_TRAILING_DELIMITER)) {
@@ -525,21 +539,22 @@ public class SQLScriptParser
             selText = SQLUtils.trimQueryStatement(syntaxManager, selText, !syntaxManager.getDialect().isDelimiterAfterQuery());
         }
 
-        SQLScriptElement element;
+        final IRegion region = regions[0];
+        final SQLScriptElement element;
         if (!CommonUtils.isEmpty(selText)) {
             SQLScriptElement parsedElement = SQLScriptParser.parseQuery(
                 context,
-                selOffset, selOffset + selLength, selOffset, false, false);
+                region.getOffset(), region.getOffset() + region.getLength(), region.getOffset(), false, false);
             if (parsedElement instanceof SQLControlCommand) {
                 // This is a command
                 element = parsedElement;
             } else {
                 // Use selected query as is
                 selText = SQLUtils.fixLineFeeds(selText);
-                element = new SQLQuery(context.getDataSource(), selText, selOffset, selLength);
+                element = new SQLQuery(context.getDataSource(), selText, region.getOffset(), region.getLength());
             }
-        } else if (selOffset >= 0) {
-            element = extractQueryAtPos(context, selOffset);
+        } else if (region.getOffset() >= 0) {
+            element = extractQueryAtPos(context, region.getOffset());
         } else {
             element = null;
         }
@@ -719,17 +734,28 @@ public class SQLScriptParser
         return queryList;
     }
 
-    public static List<SQLScriptElement> parseScript(DBCExecutionContext executionContext, String sqlScriptContent) {
-        DBPContextProvider contextProvider = () -> executionContext;
-
+    public static List<SQLScriptElement> parseScript(DBPDataSource dataSource, String sqlScriptContent) {
         SQLSyntaxManager syntaxManager = new SQLSyntaxManager();
-        syntaxManager.init(executionContext.getDataSource());
+        syntaxManager.init(dataSource.getSQLDialect(), dataSource.getContainer().getPreferenceStore());
         SQLRuleManager ruleManager = new SQLRuleManager(syntaxManager);
-        ruleManager.loadRules(executionContext.getDataSource(), false);
+        ruleManager.loadRules(dataSource, false);
 
         Document sqlDocument = new Document(sqlScriptContent);
 
-        SQLParserContext parserContext = new SQLParserContext(contextProvider, syntaxManager, ruleManager, sqlDocument);
+        SQLParserContext parserContext = new SQLParserContext(dataSource, syntaxManager, ruleManager, sqlDocument);
+        return SQLScriptParser.extractScriptQueries(parserContext, 0, sqlScriptContent.length(), true, false, true);
+    }
+
+    public static List<SQLScriptElement> parseScript(SQLDialect dialect, DBPPreferenceStore preferenceStore, String sqlScriptContent) {
+        SQLSyntaxManager syntaxManager = new SQLSyntaxManager();
+        syntaxManager.init(dialect, preferenceStore);
+        SQLRuleManager ruleManager = new SQLRuleManager(syntaxManager);
+        ruleManager.loadRules();
+
+        Document sqlDocument = new Document(sqlScriptContent);
+
+        SQLParserContext parserContext = new SQLParserContext(null, syntaxManager, ruleManager, sqlDocument);
+        parserContext.setPreferenceStore(preferenceStore);
         return SQLScriptParser.extractScriptQueries(parserContext, 0, sqlScriptContent.length(), true, false, true);
     }
 

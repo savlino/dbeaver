@@ -130,7 +130,7 @@ public class PostgreServerCockroachDB extends PostgreServerExtensionBase {
 
     @Override
     public boolean supportsResultSetLimits() {
-        return false;
+        return true;
     }
 
     @Override
@@ -250,5 +250,15 @@ public class PostgreServerCockroachDB extends PostgreServerExtensionBase {
     @Override
     public boolean supportsAlterUserChangePassword() {
         return true;
+    }
+
+    @Override
+    public boolean supportsCopyFromStdIn() {
+        return true;
+    }
+
+    @Override
+    public int getTruncateToolModes() {
+        return TRUNCATE_TOOL_MODE_SUPPORT_ONLY_ONE_TABLE | TRUNCATE_TOOL_MODE_SUPPORT_CASCADE;
     }
 }

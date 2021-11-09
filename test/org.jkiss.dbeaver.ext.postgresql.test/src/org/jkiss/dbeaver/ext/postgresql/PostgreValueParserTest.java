@@ -149,6 +149,8 @@ public class PostgreValueParserTest {
         Assert.assertArrayEquals(new String[]{}, PostgreValueParser.parseSingleObject(""));
         Assert.assertArrayEquals(new String[]{"colA", " ColB"}, PostgreValueParser.parseSingleObject("colA, ColB"));
         Assert.assertArrayEquals(new String[]{"A", " B"}, PostgreValueParser.parseSingleObject("A, B"));
+        Assert.assertArrayEquals(new String[]{"A", null, "B", null}, PostgreValueParser.parseSingleObject("A,,B,"));
+        Assert.assertArrayEquals(new String[]{"A a", "", "B", ""}, PostgreValueParser.parseSingleObject("\"A a\",\"\",B,\"\""));
     }
 
     @Test
@@ -181,7 +183,7 @@ public class PostgreValueParserTest {
     }
 
     @Test
-    public void parseArrayString() {
+    public void parseArrayString() throws DBCException {
         List<String> stringList = new ArrayList<>();
         stringList.add("A");
         stringList.add("B");

@@ -34,6 +34,8 @@ public interface DBASession extends DBPObject {
     @NotNull
     DBAAuthSpace getSessionSpace();
 
+    DBASessionPrincipal getSessionPrincipal();
+
     /**
      * Session unique ID
      */

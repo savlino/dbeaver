@@ -38,6 +38,7 @@ import org.jkiss.dbeaver.runtime.DBWorkbench;
 import org.jkiss.dbeaver.tasks.nativetool.AbstractNativeToolSettings;
 import org.jkiss.dbeaver.tasks.ui.nativetool.internal.TaskNativeUIMessages;
 import org.jkiss.dbeaver.tasks.ui.wizard.TaskConfigurationWizard;
+import org.jkiss.dbeaver.tasks.ui.wizard.TaskConfigurationWizardDialog;
 import org.jkiss.dbeaver.tasks.ui.wizard.TaskWizardExecutor;
 import org.jkiss.dbeaver.ui.UIUtils;
 import org.jkiss.utils.CommonUtils;
@@ -122,19 +123,19 @@ public abstract class AbstractNativeToolWizard<SETTINGS extends AbstractNativeTo
     }
 
     @Override
-    public void createPageControls(Composite pageContainer) {
+    public void initializeWizard(Composite pageContainer) {
         try {
             settings.loadSettings(UIUtils.getDefaultRunnableContext(), getPreferenceStore());
         } catch (DBException e) {
             DBWorkbench.getPlatformUI().showError("Settings load", "Error loading wizard settings", e);
         }
 
-        super.createPageControls(pageContainer);
+        super.initializeWizard(pageContainer);
 
-        updateErrorMessage();
+        readLocalClientInfo();
     }
 
-    void updateErrorMessage() {
+    void readLocalClientInfo() {
         WizardPage currentPage = (WizardPage) getStartingPage();
 
         if (isNativeClientHomeRequired()) {
@@ -168,6 +169,7 @@ public abstract class AbstractNativeToolWizard<SETTINGS extends AbstractNativeTo
                 currentPage.setErrorMessage(null);
             }
             getContainer().updateMessage();
+            getContainer().updateButtons();
         }
     }
 
@@ -208,6 +210,9 @@ public abstract class AbstractNativeToolWizard<SETTINGS extends AbstractNativeTo
             return super.performFinish();
         }
 
+        TaskConfigurationWizardDialog container = getContainer();
+        container.disableButtonsOnProgress();
+
         showLogPage();
 
         try {
@@ -217,6 +222,8 @@ public abstract class AbstractNativeToolWizard<SETTINGS extends AbstractNativeTo
             saveConfigurationToTask(temporaryTask);
             TaskWizardExecutor executor = new TaskWizardExecutor(getRunnableContext(), temporaryTask, log, logPage.getLogWriter());
             executor.executeTask();
+            container.enableButtonsAfterProgress();
+            container.setCompleteMarkAfterProgress();
             return false;
         } catch (Exception e) {
             DBWorkbench.getPlatformUI().showError(e.getMessage(), "Error running task", e);

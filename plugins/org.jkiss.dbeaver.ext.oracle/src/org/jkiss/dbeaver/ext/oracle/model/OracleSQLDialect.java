@@ -18,6 +18,8 @@ package org.jkiss.dbeaver.ext.oracle.model;
 
 import org.jkiss.code.NotNull;
 import org.jkiss.code.Nullable;
+import org.jkiss.dbeaver.DBException;
+import org.jkiss.dbeaver.Log;
 import org.jkiss.dbeaver.ext.oracle.data.OracleBinaryFormatter;
 import org.jkiss.dbeaver.model.*;
 import org.jkiss.dbeaver.model.data.DBDBinaryFormatter;
@@ -28,19 +30,26 @@ import org.jkiss.dbeaver.model.impl.jdbc.JDBCDataSource;
 import org.jkiss.dbeaver.model.impl.jdbc.JDBCSQLDialect;
 import org.jkiss.dbeaver.model.impl.sql.BasicSQLDialect;
 import org.jkiss.dbeaver.model.preferences.DBPPreferenceStore;
+import org.jkiss.dbeaver.model.runtime.VoidProgressMonitor;
 import org.jkiss.dbeaver.model.sql.SQLConstants;
+import org.jkiss.dbeaver.model.sql.SQLDataTypeConverter;
+import org.jkiss.dbeaver.model.sql.SQLDialect;
 import org.jkiss.dbeaver.model.sql.SQLExpressionFormatter;
+import org.jkiss.dbeaver.model.struct.DBSDataType;
 import org.jkiss.dbeaver.model.struct.DBSTypedObject;
 import org.jkiss.dbeaver.model.struct.rdb.DBSProcedure;
 import org.jkiss.utils.ArrayUtils;
 import org.jkiss.utils.CommonUtils;
 
 import java.util.Arrays;
+import java.util.Locale;
 
 /**
  * Oracle SQL dialect
  */
-public class OracleSQLDialect extends JDBCSQLDialect {
+public class OracleSQLDialect extends JDBCSQLDialect implements SQLDataTypeConverter {
+
+    private static final Log log = Log.getLog(OracleSQLDialect.class);
 
     private static final String[] EXEC_KEYWORDS = new String[]{ "call" };
 
@@ -466,7 +475,7 @@ public class OracleSQLDialect extends JDBCSQLDialect {
         switch (typeName) {
             case OracleConstants.TYPE_NUMBER:
             case OracleConstants.TYPE_DECIMAL:
-                OracleDataType dataType = (OracleDataType) DBUtils.getDataType(column);
+                DBSDataType dataType = DBUtils.getDataType(column);
                 scale = column.getScale();
                 int precision = CommonUtils.toInt(column.getPrecision());
                 if (precision == 0 && dataType != null && scale != null && scale == dataType.getMinScale()) {
@@ -502,4 +511,59 @@ public class OracleSQLDialect extends JDBCSQLDialect {
         }
         return super.getColumnTypeModifiers(dataSource, column, typeName, dataKind);
     }
+
+    @Override
+    public String convertExternalDataType(@NotNull SQLDialect sourceDialect, @NotNull DBSTypedObject sourceTypedObject, @Nullable DBPDataTypeProvider targetTypeProvider) {
+        String externalTypeName = sourceTypedObject.getTypeName().toUpperCase(Locale.ENGLISH);
+        String localDataType = null, dataTypeModifies = null;
+
+        switch (externalTypeName) {
+            case "XML":
+            case "XMLTYPE":
+                localDataType = OracleConstants.TYPE_FQ_XML;
+                break;
+            case "JSON":
+            case "JSONB":
+                localDataType = "JSON";
+                break;
+            case "GEOMETRY":
+            case "GEOGRAPHY":
+            case "SDO_GEOMETRY":
+                localDataType = OracleConstants.TYPE_FQ_GEOMETRY;
+                break;
+            case "NUMERIC":
+                localDataType = OracleConstants.TYPE_NUMBER;
+                if (sourceTypedObject.getPrecision() != null) {
+                    dataTypeModifies = sourceTypedObject.getPrecision().toString();
+                    if (sourceTypedObject.getScale() != null) {
+                        dataTypeModifies += "," + sourceTypedObject.getScale();
+                    }
+                }
+                break;
+        }
+        if (localDataType == null) {
+            return null;
+        }
+        if (targetTypeProvider != null) {
+            try {
+                DBSDataType dataType = targetTypeProvider.resolveDataType(new VoidProgressMonitor(), localDataType);
+                if (dataType == null) {
+                    return null;
+
+                }
+                String targetTypeName = DBUtils.getObjectFullName(dataType, DBPEvaluationContext.DDL);
+                if (dataTypeModifies != null) {
+                    targetTypeName += "(" + dataTypeModifies + ")";
+                }
+                return targetTypeName;
+            } catch (DBException e) {
+                log.debug("Error resolving local data type", e);
+                return null;
+            }
+        }
+        return localDataType;
+    }
+
+
+
 }
